@@ -1,0 +1,30 @@
+{
+  "name": "ma3",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Ma3 - Panda. Lipa. Fika. Digital Transformation of Kenya's Matatu Sector",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @ma3/web dev",
+    "dev:web": "pnpm --filter @ma3/web dev",
+    "dev:mobile": "pnpm --filter @ma3/mobile start",
+    "build": "pnpm --filter @ma3/web build",
+    "build:web": "pnpm --filter @ma3/web build",
+    "build:mobile": "pnpm --filter @ma3/mobile build:android",
+    "build:apk": "pnpm --filter @ma3/mobile build:apk",
+    "lint": "pnpm -r lint",
+    "type-check": "pnpm -r type-check",
+    "clean": "pnpm -r exec rm -rf node_modules dist .expo"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.28.6"
+  }
+}

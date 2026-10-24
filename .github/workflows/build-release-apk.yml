@@ -1,0 +1,111 @@
+name: Build and Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+  push:
+    tags:
+      - 'v*'
+
+env:
+  # Change this to your public releases repo
+  RELEASES_REPO: Muri-tuu/ma3-releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          # Public Mapbox token, stored as a repository secret
+          EXPO_PUBLIC_MAPBOX_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_TOKEN }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK locally
+        working-directory: apps/mobile
+        run: |
+          npx expo prebuild --platform android --clean
+          cd android
+          
+          # Enable ProGuard minification
+          sed -i 's/minifyEnabled false/minifyEnabled true/g' app/build.gradle || true
+          sed -i 's/shrinkResources false/shrinkResources true/g' app/build.gradle || true
+          
+          # Enable Hermes engine (already default in Expo 52+, but ensure it)
+          # Hermes produces smaller bundles
+          
+          # Add splits for ABI to build universal APK with only needed architectures
+          # Insert ABI splits config if not present
+          sed -i '/android {/a\    splits {\n        abi {\n            enable true\n            reset()\n            include "armeabi-v7a", "arm64-v8a"\n            universalApk true\n        }\n    }' app/build.gradle || true
+          
+          # Build release APK
+          ./gradlew assembleRelease --no-daemon
+          
+          # List built APKs for debugging
+          find . -name "*.apk" -type f
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Rename APK
+        run: |
+          VERSION=${{ github.event.inputs.version || github.ref_name }}
+          # Prefer universal APK, fallback to regular release
+          if [ -f apps/mobile/android/app/build/outputs/apk/release/app-universal-release.apk ]; then
+            mv apps/mobile/android/app/build/outputs/apk/release/app-universal-release.apk ma3-${VERSION}.apk
+          else
+            mv apps/mobile/android/app/build/outputs/apk/release/app-release.apk ma3-${VERSION}.apk
+          fi
+          # Show APK size
+          ls -lh ma3-${VERSION}.apk
+
+      - name: Upload to Public Releases Repo
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: ${{ env.RELEASES_REPO }}
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: Ma3 App ${{ github.event.inputs.version || github.ref_name }}
+          files: ma3-*.apk
+          body: |
+            ## Ma3 Android App
+            
+            Download the APK and install on your Android device.
+            
+            ### Installation
+            1. Download the APK file below
+            2. Enable "Install from unknown sources" in your device settings
+            3. Open the downloaded APK to install
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
